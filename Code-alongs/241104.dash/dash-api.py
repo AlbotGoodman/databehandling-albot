@@ -1,5 +1,6 @@
 import os
 from load_data import StockDataAPI, StockDataLocal
+from layout import Layout
 import dash
 from dash import html, dcc
 from dash.dependencies import Output, Input
@@ -7,6 +8,7 @@ import plotly_express as px
 from dateutil.relativedelta import relativedelta 
 import pandas as pd
 from functools import cache
+import dash_bootstrap_components as dbc
 
 path = os.path.join(os.path.dirname(__file__), "../../Data/Stocksdata")
 
@@ -15,34 +17,39 @@ path = os.path.join(os.path.dirname(__file__), "../../Data/Stocksdata")
 stock_data = StockDataLocal(path)
 stock_dict = {"AAPL": "Apple", "NVDA": "Nvidia", "TSLA": "Tesla", "IBM": "IBM"}
 df_dict = {symbol: stock_data.get_dataframe(symbol) for symbol in stock_dict}
+stylesheets = [dbc.themes.MATERIA]
 stock_options = [{"label": name, "value": symbol} for symbol, name in stock_dict.items()]    # items hämtar både nycklar och värden
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=stylesheets,
+                meta_tags=[dict(name="viewport", content="width=device-width, initial-scale=1.0")])
+
+server = app.server # needed for (flask) render.com
 
 ohlc_options = [{"label": option.capitalize(), "value": option} 
                 for option in ["open", "high", "low", "close"]]
 slider_marks = {i: mark for i, mark in enumerate(
     ["1 day", "1 week", "3 months", "1 year", "5 year", "MAX"])}
 
-app.layout = html.Div([
-    html.H1("Stock Viewer"),
-    html.P("Choose a stock:"),
-    dcc.Dropdown(id="stock-picker-dropdown", className="", options=stock_options,
-                 value="AAPL", placeholder="Apple"),
-    html.P(id="highest-value"),
-    html.P(id="lowest-value"),
-    dcc.RadioItems(id="ohlc-radio", className="", 
-                   options=ohlc_options,
-                   value="close"),
-    dcc.Graph(id="stock_graph"),
-    dcc.Slider(id="time-slider", 
-               min=0, 
-               max=5, 
-               step=None, 
-               value=2, 
-               marks=slider_marks),
-    dcc.Store(id="filtered-df")
-])
+app.layout = Layout(stock_dict).layout()
+# app.layout = html.Div([
+#     html.H1("Stock Viewer"),
+#     html.P("Choose a stock:"),
+#     dcc.Dropdown(id="stock-picker-dropdown", className="", options=stock_options,
+#                  value="AAPL", placeholder="Apple"),
+#     html.P(id="highest-value"),
+#     html.P(id="lowest-value"),
+#     dcc.RadioItems(id="ohlc-radio", className="", 
+#                    options=ohlc_options,
+#                    value="close"),
+#     dcc.Graph(id="stock_graph"),
+#     dcc.Slider(id="time-slider", 
+#                min=0, 
+#                max=5, 
+#                step=None, 
+#                value=2, 
+#                marks=slider_marks),
+#     dcc.Store(id="filtered-df")
+# ])
 
 @app.callback(Output("filtered-df", "data"),
               Input("stock-picker-dropdown", "value"),
@@ -57,11 +64,10 @@ def filter_df(stock, time_index):
     return dff.to_json()
 
 
-@app.callback(
-    Output("stock_graph", "figure"),
-    Input("filtered-df", "data"),
-    Input("stock-picker-dropdown", "value"),
-    Input("ohlc-radio", "value"),
+@app.callback(Output("stock_graph", "figure"),
+              Input("filtered-df", "data"),
+              Input("stock-picker-dropdown", "value"),
+              Input("ohlc-radio", "value"),
 )
 
 def update_graph(json_df, stock, ohlc):
@@ -78,8 +84,8 @@ def update_graph(json_df, stock, ohlc):
 
 def highest_lowest_value(json_df, ohlc):
     dff = pd.read_json(json_df)
-    highest_value = f"Highest value {dff[ohlc].max()}"
-    lowest_value = f"Highest value {dff[ohlc].min()}"
+    highest_value = f"Highest value {dff[ohlc].max()} USD"
+    lowest_value = f"Highest value {dff[ohlc].min()} USD"
     return highest_value, lowest_value
 
 
